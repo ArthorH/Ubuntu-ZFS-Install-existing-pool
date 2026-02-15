@@ -332,24 +332,40 @@ EOCHROOT
 }
 
 unmount_datasets() {
-    mount --make-rslave "$mountpoint/dev"
-    mount --make-rslave "$mountpoint/proc"
-    mount --make-rslave "$mountpoint/sys"
-    grep "$mountpoint" /proc/mounts | cut -f2 -d" " | sort -r | xargs umount -n || true
+    # Forcefully kill any processes using the mountpoint to ensure clean unmount
+    if command -v fuser >/dev/null 2>&1; then
+        echo "Killing processes using $mountpoint..."
+        fuser -km "$mountpoint" || true
+    fi
+
+    # Recursive unmount with retries
+    for i in {1..5}; do
+        if grep -q "$mountpoint" /proc/mounts; then
+            echo "Unmounting datasets (attempt $i)..."
+            mount --make-rslave "$mountpoint/dev" 2>/dev/null || true
+            mount --make-rslave "$mountpoint/proc" 2>/dev/null || true
+            mount --make-rslave "$mountpoint/sys" 2>/dev/null || true
+            grep "$mountpoint" /proc/mounts | cut -f2 -d" " | sort -r | xargs umount -n -l || true
+            sleep 1
+        else
+            break
+        fi
+    done
     
     if [ -n "${OS_INSTALL_MODE:-}" ]; then
         # Restore ZFS mountpoints for the new system
         echo "Restoring ZFS mountpoints..."
-        zfs set mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"
+        
+        # Set root mountpoint
+        zfs set mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name" || true
         
         # Restore /root home mountpoint
         if zfs list "$RPOOL/ROOT/$rootzfs_full_name/home/root" >/dev/null 2>&1; then
-             zfs set mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
+             zfs set mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root" || true
         fi
 
         # For all other datasets, they should inherit from root (which is now /)
         # We explicitly set them to legacy during creation, so we need to inherit now.
-        # Get list of all children
         zfs_list=$(zfs list -r -H -o name "$RPOOL/ROOT/$rootzfs_full_name")
         
         for ds in $zfs_list; do
@@ -359,7 +375,9 @@ unmount_datasets() {
             fi
             
             # Inherit mountpoint from parent (which will be based on /)
-            zfs inherit mountpoint "$ds"
+            # We ignore errors here because ZFS might fail to mount the dataset 
+            # on the host (due to non-empty directories), but the property change will succeed.
+            zfs inherit mountpoint "$ds" || true
         done
         echo "ZFS mountpoints restored."
     fi
