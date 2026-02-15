@@ -352,35 +352,8 @@ unmount_datasets() {
         fi
     done
     
-    if [ -n "${OS_INSTALL_MODE:-}" ]; then
-        # Restore ZFS mountpoints for the new system
-        echo "Restoring ZFS mountpoints..."
-        
-        # Set root mountpoint
-        zfs set mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name" || true
-        
-        # Restore /root home mountpoint
-        if zfs list "$RPOOL/ROOT/$rootzfs_full_name/home/root" >/dev/null 2>&1; then
-             zfs set mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root" || true
-        fi
-
-        # For all other datasets, they should inherit from root (which is now /)
-        # We explicitly set them to legacy during creation, so we need to inherit now.
-        zfs_list=$(zfs list -r -H -o name "$RPOOL/ROOT/$rootzfs_full_name")
-        
-        for ds in $zfs_list; do
-            # Skip root and home/root as they are already set
-            if [ "$ds" = "$RPOOL/ROOT/$rootzfs_full_name" ] || [ "$ds" = "$RPOOL/ROOT/$rootzfs_full_name/home/root" ]; then
-                continue
-            fi
-            
-            # Inherit mountpoint from parent (which will be based on /)
-            # We ignore errors here because ZFS might fail to mount the dataset 
-            # on the host (due to non-empty directories), but the property change will succeed.
-            zfs inherit mountpoint "$ds" || true
-        done
-        echo "ZFS mountpoints restored."
-    fi
+    # No mountpoint restoration logic here. 
+    # ZFSBootMenu (ZBM) requires datasets to remain as 'mountpoint=legacy'.
 }
 
 usersetup() {

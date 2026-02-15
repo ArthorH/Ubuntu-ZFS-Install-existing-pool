@@ -97,7 +97,7 @@ create_zpool_Func() {
 
     
     case "$pool" in
-        root) echo "-O mountpoint=/ -R $mountpoint \\" >> "$zpool_create_temp" ;;
+        root) echo "-O mountpoint=none -R $mountpoint \\" >> "$zpool_create_temp" ;;
         data) echo "-O mountpoint=$datapoolmount \\" >> "$zpool_create_temp" ;;
     esac
 
@@ -141,15 +141,13 @@ mountpointsFunc() {
         echo "Pool $RPOOL already imported. Handling manual mounts for $mountpoint..."
     fi
                 
-    if [ -n "${OS_INSTALL_MODE:-}" ]; then
-        # Create root dataset with legacy mountpoint to avoid conflicts
-        zfs create -o canmount=noauto -o mountpoint=legacy "$RPOOL/ROOT/$rootzfs_full_name"
-        mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name" "$mountpoint"
-    else
-        zfs create -o canmount=noauto -o mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"
-        zfs mount "$RPOOL/ROOT/$rootzfs_full_name"
-    fi
+    # Create root dataset with legacy mountpoint for ZFSBootMenu compatibility
+    zfs create -o canmount=noauto -o mountpoint=legacy "$RPOOL/ROOT/$rootzfs_full_name"
+    mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name" "$mountpoint"
     
+    # Add root to fstab for the new system
+    echo "$RPOOL/ROOT/$rootzfs_full_name / zfs defaults 0 0" >> "$mountpoint/etc/fstab"
+
     zpool set bootfs="$RPOOL/ROOT/$rootzfs_full_name" "$RPOOL"
     
     # Standard nested datasets for isolation
@@ -162,29 +160,27 @@ mountpointsFunc() {
         ds="$1"
         props="$2"
         
-        # In existing install mode, use legacy mountpoints for all datasets to avoid
-        # conflicts with the host system's mountpoints. We will restore correct
-        # mountpoints at the end of installation.
-        if [ -n "${OS_INSTALL_MODE:-}" ]; then
-            # Replace mountpoint=/path with mountpoint=legacy if present
-            if [[ "$props" == *"mountpoint="* ]]; then
-                 props=$(echo "$props" | sed 's/mountpoint=[^ ]*/mountpoint=legacy/')
-            else
-                 props="$props -o mountpoint=legacy"
-            fi
+        # Enforce legacy mountpoints for all datasets to comply with ZBM requirements.
+        # This also avoids conflicts with the host system if installing to an existing pool.
+        if [[ "$props" == *"mountpoint="* ]]; then
+             props=$(echo "$props" | sed 's/mountpoint=[^ ]*/mountpoint=legacy/')
+        else
+             props="$props -o mountpoint=legacy"
         fi
 
         # shellcheck disable=SC2086
         zfs create $props "$ds"
         
-        if [ -n "${OS_INSTALL_MODE:-}" ]; then
-            # Extract relative path from dataset name
-            # e.g. rpool/ROOT/ubuntu/var/log -> /var/log
-            rel_path=$(echo "$ds" | sed "s|^$RPOOL/ROOT/$rootzfs_full_name||")
-            if [ -n "$rel_path" ] && [[ "$props" != *"canmount=off"* ]]; then
-                 mkdir -p "$mountpoint$rel_path"
-                 mount -t zfs "$ds" "$mountpoint$rel_path"
-            fi
+        # Extract relative path from dataset name
+        # e.g. rpool/ROOT/ubuntu/var/log -> /var/log
+        rel_path=$(echo "$ds" | sed "s|^$RPOOL/ROOT/$rootzfs_full_name||")
+        
+        if [ -n "$rel_path" ] && [[ "$props" != *"canmount=off"* ]]; then
+             mkdir -p "$mountpoint$rel_path"
+             mount -t zfs "$ds" "$mountpoint$rel_path"
+             
+             # Add to fstab for the new system
+             echo "$ds $rel_path zfs defaults 0 0" >> "$mountpoint/etc/fstab"
         fi
     }
 
@@ -206,13 +202,11 @@ mountpointsFunc() {
     create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home" "-o canmount=on"
     
     # Root's home is a special case as it mounts to /root
-    if [ -n "${OS_INSTALL_MODE:-}" ]; then
-        create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home/root" "-o mountpoint=legacy"
-        mkdir -p "$mountpoint/root"
-        mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name/home/root" "$mountpoint/root"
-    else
-        zfs create -o mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
-    fi
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home/root" "-o mountpoint=legacy"
+    mkdir -p "$mountpoint/root"
+    mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name/home/root" "$mountpoint/root"
+    # Ensure fstab for /root home
+    echo "$RPOOL/ROOT/$rootzfs_full_name/home/root /root zfs defaults 0 0" >> "$mountpoint/etc/fstab"
     chmod 700 "$mountpoint/root"
 
     # Optional exclude from snapshots

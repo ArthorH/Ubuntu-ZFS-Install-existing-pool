@@ -15,7 +15,10 @@ distroinstall() {
         if [ -n "$CURRENT_ROOT_DS" ]; then
             dataset_name="$CURRENT_ROOT_DS/var/lib/AccountsService"
             if ! zfs list "$dataset_name" >/dev/null 2>&1; then
-                zfs create -p -o canmount=on "$dataset_name"
+                zfs create -p -o canmount=on -o mountpoint=legacy "$dataset_name"
+                echo "$dataset_name /var/lib/AccountsService zfs defaults 0 0" >> /etc/fstab
+                mkdir -p /var/lib/AccountsService
+                mount -t zfs "$dataset_name" /var/lib/AccountsService
             fi
         fi
     fi
