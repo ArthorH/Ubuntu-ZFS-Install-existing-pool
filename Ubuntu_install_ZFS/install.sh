@@ -7,6 +7,10 @@ set -euo pipefail
 # Get project root to allow script_copy to find files correctly
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Sanitize project files (convert CRLF to LF) to handle Windows line endings
+echo "Sanitizing project files..."
+find "$PROJECT_ROOT" -type f -not -path "*/.git/*" -exec sed -i 's/\r//g' {} + || true
+
 # Source configuration and modules
 source "$PROJECT_ROOT/config.sh"
 source "$PROJECT_ROOT/bin/utility"
@@ -48,6 +52,41 @@ initialinstall() {
     echo "Following reboot, run script with postreboot option to complete installation."
 }
 
+os_install() {
+    export OS_INSTALL_MODE="yes"
+    disclaimer
+    connectivity_check 
+    
+    get_existing_pool_info
+    identify_existing_esp
+    
+    ipv6_apt_live_iso_fix
+    
+    debootstrap_part1_Func
+    # debootstrap_createzfspools_Func is replaced by logic in mountpointsFunc to handle existing pools
+    mountpointsFunc 
+    debootstrap_installminsys_Func
+    systemsetupFunc_part1 
+    systemsetupFunc_part2 
+    systemsetupFunc_part3 
+    
+    keyboard_console_setup
+    systemsetupFunc_part4 
+    systemsetupFunc_part5 
+    
+    usersetup 
+    logcompress 
+    reinstate_apt "chroot" 
+    script_copy 
+    fixfsmountorder 
+    logcopy 
+    
+    echo "OS installation into existing pool complete."
+    echo "Reboot required to complete installation."
+    echo "First login is ${user}:${PASSWORD}"
+    echo "Following reboot, run script with postreboot option to complete installation."
+}
+
 postreboot() {
     disclaimer
     connectivity_check 
@@ -78,6 +117,11 @@ case "${1-default}" in
         read -r _
         postreboot
     ;;
+    osinstall)
+        user_action_banner "Starting installation into EXISTING ZFS pool.\n  Press ENTER to CONTINUE or CTRL+C to ABORT."
+        read -r _
+        os_install
+    ;;
     reinstall-zbm)
         user_action_banner "Re-installing zfsbootmenu.\n  Press ENTER to CONTINUE or CTRL+C to ABORT."
         read -r _
@@ -89,7 +133,7 @@ case "${1-default}" in
         reinstall-pyznap
     ;;
     *)
-        printf "%s\n%s\n%s\n" "-----" "Usage: $0 initial | postreboot | reinstall-zbm | reinstall-pyznap" "-----"
+        printf "%s\n%s\n%s\n" "-----" "Usage: $0 initial | osinstall | postreboot | reinstall-zbm | reinstall-pyznap" "-----"
     ;;
 esac
 
