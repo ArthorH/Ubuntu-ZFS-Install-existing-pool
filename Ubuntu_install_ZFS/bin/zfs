@@ -136,12 +136,19 @@ mountpointsFunc() {
         rootzfs_full_name="ubuntu.$(date +%Y.%m.%d)"
     else
         # In OS_INSTALL_MODE, RPOOL and rootzfs_full_name are set by get_existing_pool_info
-        # Need to ensure mountpoint is set correctly on the pool for the install session
-        zpool set altroot="$mountpoint" "$RPOOL"
+        # We skip setting altroot because the pool is already imported by the host.
+        # Instead, we will mount the datasets manually to the temporary mountpoint.
+        echo "Pool $RPOOL already imported. Handling manual mounts for $mountpoint..."
     fi
                 
     zfs create -o canmount=noauto -o mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"
-    zfs mount "$RPOOL/ROOT/$rootzfs_full_name"
+    
+    if [ -n "${OS_INSTALL_MODE:-}" ]; then
+        mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name" "$mountpoint"
+    else
+        zfs mount "$RPOOL/ROOT/$rootzfs_full_name"
+    fi
+    
     zpool set bootfs="$RPOOL/ROOT/$rootzfs_full_name" "$RPOOL"
     
     # Standard nested datasets for isolation
@@ -150,30 +157,52 @@ mountpointsFunc() {
     # Container datasets (canmount=off) prevents intermediate directory issues
     # Leaf datasets (canmount=on) ensure data is mounted where expected
     
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/srv"
+    create_and_mount() {
+        ds="$1"
+        props="$2"
+        # shellcheck disable=SC2086
+        zfs create $props "$ds"
+        if [ -n "${OS_INSTALL_MODE:-}" ]; then
+            # Extract relative path from dataset name
+            # e.g. rpool/ROOT/ubuntu/var/log -> /var/log
+            rel_path=$(echo "$ds" | sed "s|^$RPOOL/ROOT/$rootzfs_full_name||")
+            if [ -n "$rel_path" ] && [[ "$props" != *"canmount=off"* ]]; then
+                 mkdir -p "$mountpoint$rel_path"
+                 mount -t zfs "$ds" "$mountpoint$rel_path"
+            fi
+        fi
+    }
+
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/srv" "-o canmount=on"
     
-    zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/usr"
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/usr/local"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/usr" "-o canmount=off"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/usr/local" "-o canmount=on"
     
-    zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/var"
-    zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/var/lib"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var" "-o canmount=off"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/lib" "-o canmount=off"
     
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/games"
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/log"
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/mail"
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/snap"
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/spool"
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/www"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/games" "-o canmount=on"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/log" "-o canmount=on"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/mail" "-o canmount=on"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/snap" "-o canmount=on"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/spool" "-o canmount=on"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/www" "-o canmount=on"
     
-    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/home"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home" "-o canmount=on"
+    
+    # Root's home is a special case as it mounts to /root
     zfs create -o mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
+    if [ -n "${OS_INSTALL_MODE:-}" ]; then
+        mkdir -p "$mountpoint/root"
+        mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name/home/root" "$mountpoint/root"
+    fi
     chmod 700 "$mountpoint/root"
 
     # Optional exclude from snapshots
-    zfs create -o com.sun:auto-snapshot=false "$RPOOL/ROOT/$rootzfs_full_name/var/cache"
-    zfs create -o com.sun:auto-snapshot=false "$RPOOL/ROOT/$rootzfs_full_name/var/tmp"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/cache" "-o com.sun:auto-snapshot=false -o canmount=on"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/tmp" "-o com.sun:auto-snapshot=false -o canmount=on"
     chmod 1777 "$mountpoint/var/tmp"
-    zfs create -o com.sun:auto-snapshot=false "$RPOOL/ROOT/$rootzfs_full_name/var/lib/docker"
+    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/lib/docker" "-o com.sun:auto-snapshot=false -o canmount=on"
 
     mkdir -p "$mountpoint/run"
     mount -t tmpfs tmpfs "$mountpoint/run"
