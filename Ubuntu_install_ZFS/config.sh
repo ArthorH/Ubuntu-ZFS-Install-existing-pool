@@ -2,7 +2,7 @@
 
 # Ubuntu release and variant
 ubuntuver="noble"            # Ubuntu release. "jammy" (22.04), "noble" (24.04), "questing" (25.10)
-distro_variant="server"      # Ubuntu variant. "server" (CLI only), "desktop", "kubuntu", etc.
+distro_variant="desktop"      # Ubuntu variant. "server" (CLI only), "desktop", "kubuntu", etc.
 
 # User and Hostname
 user="testuser"              # Username for new install
@@ -37,6 +37,11 @@ remoteaccess_hostname="zbm"  # Hostname for ZFSBootMenu
 remoteaccess_ip_config="dhcp" # "dhcp", "dhcp,dhcp6", "dhcp6", or "static"
 remoteaccess_ip="192.168.0.222" # Static IP for ZFSBootMenu
 remoteaccess_netmask="255.255.255.0" # Subnet mask for static IP
+
+# Wi-Fi Configuration
+wifi_ssid=""                 # Your Wi-Fi SSID
+wifi_password=""             # Your Wi-Fi Password
+wifiprefix="w"               # First letter of wifi interface (e.g., "w" for wlan0)
 
 # Timeouts and Boot
 timeout_rEFInd="3"           # rEFInd timeout
