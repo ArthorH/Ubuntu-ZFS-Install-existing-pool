@@ -146,18 +146,26 @@ mountpointsFunc() {
     
     # Standard nested datasets for isolation
     # These are nested under the OS root so they are not shared between different system installs
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/srv"
+    
+    # Container datasets (canmount=off) prevents intermediate directory issues
+    # Leaf datasets (canmount=on) ensure data is mounted where expected
+    
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/srv"
+    
     zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/usr"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/usr/local"
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/usr/local"
+    
     zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/var"
     zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/var/lib"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/games"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/log"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/mail"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/snap"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/spool"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/www"
-    zfs create "$RPOOL/ROOT/$rootzfs_full_name/home"
+    
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/games"
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/log"
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/mail"
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/snap"
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/spool"
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/var/www"
+    
+    zfs create -o canmount=on "$RPOOL/ROOT/$rootzfs_full_name/home"
     zfs create -o mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
     chmod 700 "$mountpoint/root"
 

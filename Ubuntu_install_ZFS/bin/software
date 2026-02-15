@@ -13,7 +13,10 @@ distroinstall() {
         # Detect current root dataset to ensure isolation
         CURRENT_ROOT_DS=$(df / --output=source | tail -n1)
         if [ -n "$CURRENT_ROOT_DS" ]; then
-            zfs create -p "$CURRENT_ROOT_DS/var/lib/AccountsService"
+            dataset_name="$CURRENT_ROOT_DS/var/lib/AccountsService"
+            if ! zfs list "$dataset_name" >/dev/null 2>&1; then
+                zfs create -p -o canmount=on "$dataset_name"
+            fi
         fi
     fi
 
@@ -42,19 +45,20 @@ distroinstall() {
 
 NetworkManager_config() {
     if [ "$(dpkg-query --show --showformat='${db:Status-Status}\n' "network-manager")" = "installed" ]; then
-        ethernetinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ethprefix}*")")"
-        rm -f "/etc/netplan/01-$ethernetinterface.yaml"
+        # Use NetworkManager as the global renderer. 
+        # This is more robust as it allows NM to manage all discovered hardware automatically.
         cat > /etc/netplan/01-NetworkManager.yaml <<-EOF
 			network:
 			  version: 2
 			  renderer: NetworkManager
-			  ethernets:
-			    "$ethernetinterface":
-			      dhcp4: true
 		EOF
         chmod 600 /etc/netplan/01-NetworkManager.yaml
+        
+        # Cleanup old systemd-networkd configs to avoid conflicts
         systemctl stop systemd-networkd.service systemd-networkd.socket || true
         systemctl disable systemd-networkd.service systemd-networkd.socket || true
+        
+        # Apply the new global renderer config
         netplan apply
     fi
 }
