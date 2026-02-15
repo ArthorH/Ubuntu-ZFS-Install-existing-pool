@@ -141,11 +141,12 @@ mountpointsFunc() {
         echo "Pool $RPOOL already imported. Handling manual mounts for $mountpoint..."
     fi
                 
-    zfs create -o canmount=noauto -o mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"
-    
     if [ -n "${OS_INSTALL_MODE:-}" ]; then
+        # Create root dataset with legacy mountpoint to avoid conflicts
+        zfs create -o canmount=noauto -o mountpoint=legacy "$RPOOL/ROOT/$rootzfs_full_name"
         mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name" "$mountpoint"
     else
+        zfs create -o canmount=noauto -o mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"
         zfs mount "$RPOOL/ROOT/$rootzfs_full_name"
     fi
     
@@ -160,8 +161,22 @@ mountpointsFunc() {
     create_and_mount() {
         ds="$1"
         props="$2"
+        
+        # In existing install mode, use legacy mountpoints for all datasets to avoid
+        # conflicts with the host system's mountpoints. We will restore correct
+        # mountpoints at the end of installation.
+        if [ -n "${OS_INSTALL_MODE:-}" ]; then
+            # Replace mountpoint=/path with mountpoint=legacy if present
+            if [[ "$props" == *"mountpoint="* ]]; then
+                 props=$(echo "$props" | sed 's/mountpoint=[^ ]*/mountpoint=legacy/')
+            else
+                 props="$props -o mountpoint=legacy"
+            fi
+        fi
+
         # shellcheck disable=SC2086
         zfs create $props "$ds"
+        
         if [ -n "${OS_INSTALL_MODE:-}" ]; then
             # Extract relative path from dataset name
             # e.g. rpool/ROOT/ubuntu/var/log -> /var/log
@@ -191,10 +206,12 @@ mountpointsFunc() {
     create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home" "-o canmount=on"
     
     # Root's home is a special case as it mounts to /root
-    zfs create -o mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
     if [ -n "${OS_INSTALL_MODE:-}" ]; then
+        create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home/root" "-o mountpoint=legacy"
         mkdir -p "$mountpoint/root"
         mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name/home/root" "$mountpoint/root"
+    else
+        zfs create -o mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
     fi
     chmod 700 "$mountpoint/root"
 

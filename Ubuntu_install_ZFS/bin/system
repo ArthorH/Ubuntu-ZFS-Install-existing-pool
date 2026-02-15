@@ -336,6 +336,33 @@ unmount_datasets() {
     mount --make-rslave "$mountpoint/proc"
     mount --make-rslave "$mountpoint/sys"
     grep "$mountpoint" /proc/mounts | cut -f2 -d" " | sort -r | xargs umount -n || true
+    
+    if [ -n "${OS_INSTALL_MODE:-}" ]; then
+        # Restore ZFS mountpoints for the new system
+        echo "Restoring ZFS mountpoints..."
+        zfs set mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"
+        
+        # Restore /root home mountpoint
+        if zfs list "$RPOOL/ROOT/$rootzfs_full_name/home/root" >/dev/null 2>&1; then
+             zfs set mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
+        fi
+
+        # For all other datasets, they should inherit from root (which is now /)
+        # We explicitly set them to legacy during creation, so we need to inherit now.
+        # Get list of all children
+        zfs_list=$(zfs list -r -H -o name "$RPOOL/ROOT/$rootzfs_full_name")
+        
+        for ds in $zfs_list; do
+            # Skip root and home/root as they are already set
+            if [ "$ds" = "$RPOOL/ROOT/$rootzfs_full_name" ] || [ "$ds" = "$RPOOL/ROOT/$rootzfs_full_name/home/root" ]; then
+                continue
+            fi
+            
+            # Inherit mountpoint from parent (which will be based on /)
+            zfs inherit mountpoint "$ds"
+        done
+        echo "ZFS mountpoints restored."
+    fi
 }
 
 usersetup() {
