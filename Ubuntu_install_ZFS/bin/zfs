@@ -144,6 +144,29 @@ mountpointsFunc() {
     zfs mount "$RPOOL/ROOT/$rootzfs_full_name"
     zpool set bootfs="$RPOOL/ROOT/$rootzfs_full_name" "$RPOOL"
     
+    # Standard nested datasets for isolation
+    # These are nested under the OS root so they are not shared between different system installs
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/srv"
+    zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/usr"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/usr/local"
+    zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/var"
+    zfs create -o canmount=off "$RPOOL/ROOT/$rootzfs_full_name/var/lib"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/games"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/log"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/mail"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/snap"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/spool"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/var/www"
+    zfs create "$RPOOL/ROOT/$rootzfs_full_name/home"
+    zfs create -o mountpoint=/root "$RPOOL/ROOT/$rootzfs_full_name/home/root"
+    chmod 700 "$mountpoint/root"
+
+    # Optional exclude from snapshots
+    zfs create -o com.sun:auto-snapshot=false "$RPOOL/ROOT/$rootzfs_full_name/var/cache"
+    zfs create -o com.sun:auto-snapshot=false "$RPOOL/ROOT/$rootzfs_full_name/var/tmp"
+    chmod 1777 "$mountpoint/var/tmp"
+    zfs create -o com.sun:auto-snapshot=false "$RPOOL/ROOT/$rootzfs_full_name/var/lib/docker"
+
     mkdir -p "$mountpoint/run"
     mount -t tmpfs tmpfs "$mountpoint/run"
 }

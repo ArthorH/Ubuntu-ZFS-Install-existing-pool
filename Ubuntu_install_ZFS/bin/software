@@ -10,7 +10,11 @@ distroinstall() {
     apt dist-upgrade --yes
 
     if [ "$distro_variant" != "server" ]; then
-        zfs create "$RPOOL/var/lib/AccountsService"
+        # Detect current root dataset to ensure isolation
+        CURRENT_ROOT_DS=$(df / --output=source | tail -n1)
+        if [ -n "$CURRENT_ROOT_DS" ]; then
+            zfs create -p "$CURRENT_ROOT_DS/var/lib/AccountsService"
+        fi
     fi
 
     case "$distro_variant" in
