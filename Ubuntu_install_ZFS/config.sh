@@ -57,5 +57,6 @@ ipv6_apt_fix_live_iso="no"   # Enable if apt-get is slow in live ISO
 # Misc
 install_warning_level="PRIORITY=critical" # "PRIORITY=critical" or "FRONTEND=noninteractive"
 extra_programs="no"          # Install cifs-utils, locate, man-db, openssh-server, tldr
+sanoid_snapshots="yes"       # Install and enable sanoid for automated snapshots
 locale="en_GB.UTF-8"         # Language setting
 timezone="Europe/London"     # Timezone setting

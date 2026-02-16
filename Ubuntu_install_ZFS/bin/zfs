@@ -136,8 +136,13 @@ mountpointsFunc() {
         rootzfs_full_name="ubuntu.$(date +%Y.%m.%d)"
     else
         # In OS_INSTALL_MODE, RPOOL and rootzfs_full_name are set by get_existing_pool_info
-        # Need to ensure mountpoint is set correctly on the pool for the install session
-        zpool set altroot="$mountpoint" "$RPOOL"
+        # altroot is read-only; we must re-import with -R to change it for the install session
+        current_altroot=$(zpool get -H -o value altroot "$RPOOL")
+        if [ "$current_altroot" != "$mountpoint" ]; then
+            echo "Pool $RPOOL has altroot '$current_altroot', but we need '$mountpoint'. Re-importing..."
+            zpool export -f "$RPOOL" || true
+            zpool import -f -R "$mountpoint" -N "$RPOOL"
+        fi
     fi
                 
     zfs create -o canmount=noauto -o mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"

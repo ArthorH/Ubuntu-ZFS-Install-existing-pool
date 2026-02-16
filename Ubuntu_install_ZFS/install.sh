@@ -93,7 +93,9 @@ postreboot() {
     
     distroinstall 
     NetworkManager_config 
-    sanoid_install 
+    if [ "${sanoid_snapshots}" = "yes" ]; then
+        sanoid_install 
+    fi
     extra_programs 
     reinstate_apt "base" 
     
