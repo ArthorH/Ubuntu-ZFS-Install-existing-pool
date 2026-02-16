@@ -45,7 +45,6 @@ initialinstall() {
     script_copy 
     fixfsmountorder 
     logcopy 
-    unmount_datasets
     
     echo "Initial minimal system setup complete."
     echo "Reboot required to complete installation."
@@ -81,7 +80,6 @@ os_install() {
     script_copy 
     fixfsmountorder 
     logcopy 
-    unmount_datasets
     
     echo "OS installation into existing pool complete."
     echo "Reboot required to complete installation."

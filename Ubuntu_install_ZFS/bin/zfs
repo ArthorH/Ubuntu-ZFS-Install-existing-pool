@@ -97,7 +97,7 @@ create_zpool_Func() {
 
     
     case "$pool" in
-        root) echo "-O mountpoint=none -R $mountpoint \\" >> "$zpool_create_temp" ;;
+        root) echo "-O mountpoint=/ -R $mountpoint \\" >> "$zpool_create_temp" ;;
         data) echo "-O mountpoint=$datapoolmount \\" >> "$zpool_create_temp" ;;
     esac
 
@@ -136,88 +136,19 @@ mountpointsFunc() {
         rootzfs_full_name="ubuntu.$(date +%Y.%m.%d)"
     else
         # In OS_INSTALL_MODE, RPOOL and rootzfs_full_name are set by get_existing_pool_info
-        # We skip setting altroot because the pool is already imported by the host.
-        # Instead, we will mount the datasets manually to the temporary mountpoint.
-        echo "Pool $RPOOL already imported. Handling manual mounts for $mountpoint..."
+        # Need to ensure mountpoint is set correctly on the pool for the install session
+        zpool set altroot="$mountpoint" "$RPOOL"
     fi
                 
-    # Create root dataset with legacy mountpoint for ZFSBootMenu compatibility
-    zfs create -o canmount=noauto -o mountpoint=legacy "$RPOOL/ROOT/$rootzfs_full_name"
-    
-    # Ensure host mountpoint exists
-    mkdir -p "$mountpoint"
-    mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name" "$mountpoint"
-    
-    # Add root to fstab for the new system
-    mkdir -p "$mountpoint/etc"
-    echo "$RPOOL/ROOT/$rootzfs_full_name / zfs defaults 0 0" >> "$mountpoint/etc/fstab"
-
+    zfs create -o canmount=noauto -o mountpoint=/ "$RPOOL/ROOT/$rootzfs_full_name"
+    zfs mount "$RPOOL/ROOT/$rootzfs_full_name"
     zpool set bootfs="$RPOOL/ROOT/$rootzfs_full_name" "$RPOOL"
     
-    # Standard nested datasets for isolation
-    # These are nested under the OS root so they are not shared between different system installs
-    
-    # Container datasets (canmount=off) prevents intermediate directory issues
-    # Leaf datasets (canmount=on) ensure data is mounted where expected
-    
-    create_and_mount() {
-        ds="$1"
-        props="$2"
-        
-        # Enforce legacy mountpoints for all datasets to comply with ZBM requirements.
-        # This also avoids conflicts with the host system if installing to an existing pool.
-        if [[ "$props" == *"mountpoint="* ]]; then
-             props=$(echo "$props" | sed 's/mountpoint=[^ ]*/mountpoint=legacy/')
-        else
-             props="$props -o mountpoint=legacy"
-        fi
-
-        # shellcheck disable=SC2086
-        zfs create $props "$ds"
-        
-        # Extract relative path from dataset name
-        # e.g. rpool/ROOT/ubuntu/var/log -> /var/log
-        rel_path=$(echo "$ds" | sed "s|^$RPOOL/ROOT/$rootzfs_full_name||")
-        
-        if [ -n "$rel_path" ] && [[ "$props" != *"canmount=off"* ]]; then
-             mkdir -p "$mountpoint$rel_path"
-             mount -t zfs "$ds" "$mountpoint$rel_path"
-             
-             # Add to fstab for the new system
-             echo "$ds $rel_path zfs defaults 0 0" >> "$mountpoint/etc/fstab"
-        fi
-    }
-
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/srv" "-o canmount=on"
-    
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/usr" "-o canmount=off"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/usr/local" "-o canmount=on"
-    
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var" "-o canmount=off"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/lib" "-o canmount=off"
-    
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/games" "-o canmount=on"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/log" "-o canmount=on"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/mail" "-o canmount=on"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/snap" "-o canmount=on"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/spool" "-o canmount=on"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/www" "-o canmount=on"
-    
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home" "-o canmount=on"
-    
-    # Root's home is a special case as it mounts to /root
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/home/root" "-o mountpoint=legacy"
+    # Single dataset setup (everything on root) as requested
     mkdir -p "$mountpoint/root"
-    mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name/home/root" "$mountpoint/root"
-    # Ensure fstab for /root home
-    echo "$RPOOL/ROOT/$rootzfs_full_name/home/root /root zfs defaults 0 0" >> "$mountpoint/etc/fstab"
     chmod 700 "$mountpoint/root"
-
-    # Optional exclude from snapshots
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/cache" "-o com.sun:auto-snapshot=false -o canmount=on"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/tmp" "-o com.sun:auto-snapshot=false -o canmount=on"
+    mkdir -p "$mountpoint/var/tmp"
     chmod 1777 "$mountpoint/var/tmp"
-    create_and_mount "$RPOOL/ROOT/$rootzfs_full_name/var/lib/docker" "-o com.sun:auto-snapshot=false -o canmount=on"
 
     mkdir -p "$mountpoint/run"
     mount -t tmpfs tmpfs "$mountpoint/run"

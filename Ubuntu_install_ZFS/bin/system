@@ -118,39 +118,29 @@ EOCHROOT
     echo "127.0.1.1       $hostname" >> "$mountpoint/etc/hosts"
     
     # Configure networking
-    # Detect and configure all available ethernet interfaces
-    ethernet_ifs=$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ethprefix}*" -exec basename {} \;)
+    ethernetinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ethprefix}*" | head -n 1)" || echo "")"
     wifiinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${wifiprefix}*" | head -n 1)" || echo "")"
     
     cat > "$mountpoint/etc/netplan/01-netcfg.yaml" <<-EOF
 		network:
 		  version: 2
 		  ethernets:
+		$(if [ -n "$ethernetinterface" ]; then
+		    echo "    $ethernetinterface:"
+		    echo "      dhcp4: yes"
+		fi)
+		$(if [ -n "$wifi_ssid" ] && [ -n "$wifiinterface" ]; then
+		    echo "  wifis:"
+		    echo "    $wifiinterface:"
+		    echo "      dhcp4: yes"
+		    echo "      access-points:"
+		    echo "        \"$wifi_ssid\":"
+		    echo "          password: \"$wifi_password\""
+		fi)
 	EOF
-
-    if [ -n "$ethernet_ifs" ]; then
-        for iface in $ethernet_ifs; do
-            cat >> "$mountpoint/etc/netplan/01-netcfg.yaml" <<-EOF
-			    $iface:
-			      dhcp4: yes
-			EOF
-            # Remove any old netplan files if they exist
-            rm -f "$mountpoint/etc/netplan/01-$iface.yaml"
-        done
-    fi
-
-    if [ -n "$wifi_ssid" ] && [ -n "$wifiinterface" ]; then
-        cat >> "$mountpoint/etc/netplan/01-netcfg.yaml" <<-EOF
-		  wifis:
-		    $wifiinterface:
-		      dhcp4: yes
-		      access-points:
-		        "$wifi_ssid":
-		          password: "$wifi_password"
-		EOF
-    fi
-
     chmod 600 "$mountpoint/etc/netplan/01-netcfg.yaml"
+    # Remove any old netplan files if they exist
+    if [ -n "$ethernetinterface" ]; then rm -f "$mountpoint/etc/netplan/01-$ethernetinterface.yaml"; fi
     mount --rbind /dev "$mountpoint/dev"
     mount --rbind /proc "$mountpoint/proc"
     mount --rbind /sys "$mountpoint/sys"
@@ -332,28 +322,10 @@ EOCHROOT
 }
 
 unmount_datasets() {
-    # Forcefully kill any processes using the mountpoint to ensure clean unmount
-    if command -v fuser >/dev/null 2>&1; then
-        echo "Killing processes using $mountpoint..."
-        fuser -km "$mountpoint" || true
-    fi
-
-    # Recursive unmount with retries
-    for i in {1..5}; do
-        if grep -q "$mountpoint" /proc/mounts; then
-            echo "Unmounting datasets (attempt $i)..."
-            mount --make-rslave "$mountpoint/dev" 2>/dev/null || true
-            mount --make-rslave "$mountpoint/proc" 2>/dev/null || true
-            mount --make-rslave "$mountpoint/sys" 2>/dev/null || true
-            grep "$mountpoint" /proc/mounts | cut -f2 -d" " | sort -r | xargs umount -n -l || true
-            sleep 1
-        else
-            break
-        fi
-    done
-    
-    # No mountpoint restoration logic here. 
-    # ZFSBootMenu (ZBM) requires datasets to remain as 'mountpoint=legacy'.
+    mount --make-rslave "$mountpoint/dev"
+    mount --make-rslave "$mountpoint/proc"
+    mount --make-rslave "$mountpoint/sys"
+    grep "$mountpoint" /proc/mounts | cut -f2 -d" " | sort -r | xargs umount -n || true
 }
 
 usersetup() {
