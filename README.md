@@ -250,6 +250,7 @@ Enjoy your ZFS‑based Ubuntu!
 # Credits
 
 Be shure to check out https://github.com/Sithuk/ubuntu-server-zfsbootmenu Sithuk's script!
+The core installation logic and ZFS+ZBM integration originates from that script.
 Without this script this project would have been impossible :)  ❤️
 
 # License
