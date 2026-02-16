@@ -81,7 +81,7 @@ hostname="ubuntu"
 # ZFS Root Pool Configuration
 RPOOL="rpool"                
 zfs_rpool_ashift="12"        
-zfs_root_size="50G"          # <----- This one is IMPORTANT (i usually go with 300G)
+zfs_root_size="50G"          # <----- This one is IMPORTANT i usually go with 300G (which is 240ish effective capacity)
 topology_root="single"       # <---  i didnt tested those and they probably dont work after refactor sowy
 disks_root="1"            
 
