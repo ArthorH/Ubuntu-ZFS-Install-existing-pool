@@ -140,8 +140,25 @@ mountpointsFunc() {
         current_altroot=$(zpool get -H -o value altroot "$RPOOL")
         if [ "$current_altroot" != "$mountpoint" ]; then
             echo "Pool $RPOOL has altroot '$current_altroot', but we need '$mountpoint'. Re-importing..."
+            
+            # Check if we are running from the pool we're trying to export
+            if df / --output=source | grep -q "^${RPOOL}/"; then
+                echo "CRITICAL ERROR: You are running this script from a dataset within the pool '$RPOOL' which is mounted at /."
+                echo "ZFS cannot export a pool while it is in use as the root filesystem."
+                echo "Please copy the 'Ubuntu_install_ZFS' folder to /tmp/ and run it from there:"
+                echo "  cp -r ~/Ubuntu_install_ZFS /tmp/ && sudo /tmp/Ubuntu_install_ZFS/install.sh osinstall"
+                exit 1
+            fi
+
+            # Force unmount all datasets in the pool to release 'busy' handles
+            zfs unmount -a -f || true
             zpool export -f "$RPOOL" || true
-            zpool import -f -R "$mountpoint" -N "$RPOOL"
+            
+            # Attempt re-import
+            if ! zpool import -f -R "$mountpoint" -N "$RPOOL"; then
+                echo "Error: Failed to re-import pool '$RPOOL' with altroot '$mountpoint'."
+                exit 1
+            fi
         fi
     fi
                 
