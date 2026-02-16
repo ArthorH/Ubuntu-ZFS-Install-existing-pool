@@ -143,9 +143,13 @@ mountpointsFunc() {
                 
     # Create root dataset with legacy mountpoint for ZFSBootMenu compatibility
     zfs create -o canmount=noauto -o mountpoint=legacy "$RPOOL/ROOT/$rootzfs_full_name"
+    
+    # Ensure host mountpoint exists
+    mkdir -p "$mountpoint"
     mount -t zfs "$RPOOL/ROOT/$rootzfs_full_name" "$mountpoint"
     
     # Add root to fstab for the new system
+    mkdir -p "$mountpoint/etc"
     echo "$RPOOL/ROOT/$rootzfs_full_name / zfs defaults 0 0" >> "$mountpoint/etc/fstab"
 
     zpool set bootfs="$RPOOL/ROOT/$rootzfs_full_name" "$RPOOL"
