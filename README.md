@@ -238,6 +238,16 @@ Boot into live USB again (i know it sucks but i don't have the mental capacity t
 
 Download the repo and all tooling once again, then run:
 
+Verify pool name
+
+```bash
+sudo zpool import
+```
+Import pool
+```bash
+sudo zpool import zroot
+```
+make new install DONT FORGET TO EDIT CONFIGS!
 ```bash
 sudo ./install.sh osinstall
 ```
