@@ -118,27 +118,28 @@ EOCHROOT
     echo "127.0.1.1       $hostname" >> "$mountpoint/etc/hosts"
     
     # Configure networking
-    ethernetinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ethprefix}*" | head -n 1)" || echo "")"
-    wifiinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${wifiprefix}*" | head -n 1)" || echo "")"
+    ethernetinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ethprefix}*" | head -n 1)" 2>/dev/null || echo "")"
+    wifiinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${wifiprefix}*" | head -n 1)" 2>/dev/null || echo "")"
     
-    cat > "$mountpoint/etc/netplan/01-netcfg.yaml" <<-EOF
-		network:
-		  version: 2
-		  ethernets:
-		$(if [ -n "$ethernetinterface" ]; then
-		    echo "    $ethernetinterface:"
-		    echo "      dhcp4: yes"
-		fi)
-		$(if [ -n "$wifi_ssid" ] && [ -n "$wifiinterface" ]; then
-		    echo "  wifis:"
-		    echo "    $wifiinterface:"
-		    echo "      dhcp4: yes"
-		    echo "      access-points:"
-		    echo "        \"$wifi_ssid\":"
-		    echo "          password: \"$wifi_password\""
-		fi)
-	EOF
-    chmod 600 "$mountpoint/etc/netplan/01-netcfg.yaml"
+    NETPLAN_FILE="$mountpoint/etc/netplan/01-netcfg.yaml"
+    echo "network:" > "$NETPLAN_FILE"
+    echo "  version: 2" >> "$NETPLAN_FILE"
+    
+    if [ -n "$ethernetinterface" ]; then
+        echo "  ethernets:" >> "$NETPLAN_FILE"
+        echo "    $ethernetinterface:" >> "$NETPLAN_FILE"
+        echo "      dhcp4: yes" >> "$NETPLAN_FILE"
+    fi
+
+    if [ -n "$wifi_ssid" ] && [ -n "$wifiinterface" ]; then
+        echo "  wifis:" >> "$NETPLAN_FILE"
+        echo "    $wifiinterface:" >> "$NETPLAN_FILE"
+        echo "      dhcp4: yes" >> "$NETPLAN_FILE"
+        echo "      access-points:" >> "$NETPLAN_FILE"
+        echo "        \"$wifi_ssid\":" >> "$NETPLAN_FILE"
+        echo "          password: \"$wifi_password\"" >> "$NETPLAN_FILE"
+    fi
+    chmod 600 "$NETPLAN_FILE"
     # Remove any old netplan files if they exist
     if [ -n "$ethernetinterface" ]; then rm -f "$mountpoint/etc/netplan/01-$ethernetinterface.yaml"; fi
     mount --rbind /dev "$mountpoint/dev"
