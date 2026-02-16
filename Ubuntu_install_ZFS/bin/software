@@ -43,20 +43,26 @@ distroinstall() {
 
 NetworkManager_config() {
     if [ "$(dpkg-query --show --showformat='${db:Status-Status}\n' "network-manager")" = "installed" ]; then
-        ethernetinterface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ethprefix}*")")"
-        rm -f "/etc/netplan/01-$ethernetinterface.yaml"
-        cat > /etc/netplan/01-NetworkManager.yaml <<-EOF
-			network:
-			  version: 2
-			  renderer: NetworkManager
-			  ethernets:
-			    "$ethernetinterface":
-			      dhcp4: true
-		EOF
-        chmod 600 /etc/netplan/01-NetworkManager.yaml
-        systemctl stop systemd-networkd.service systemd-networkd.socket || true
-        systemctl disable systemd-networkd.service systemd-networkd.socket || true
-        netplan apply
+        # Find the first interface matching the prefix
+        ethernetinterface="$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ethprefix}*" | head -n 1 | xargs -r basename)"
+        
+        if [ -n "$ethernetinterface" ]; then
+            rm -f "/etc/netplan/01-$ethernetinterface.yaml"
+            cat > /etc/netplan/01-NetworkManager.yaml <<-EOF
+				network:
+				  version: 2
+				  renderer: NetworkManager
+				  ethernets:
+				    "$ethernetinterface":
+				      dhcp4: true
+			EOF
+            chmod 600 /etc/netplan/01-NetworkManager.yaml
+            systemctl stop systemd-networkd.service systemd-networkd.socket || true
+            systemctl disable systemd-networkd.service systemd-networkd.socket || true
+            netplan apply
+        else
+            echo "Warning: No ethernet interface found matching prefix '${ethprefix}'. Skipping Netplan ethernet configuration."
+        fi
     fi
 }
 
