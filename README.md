@@ -242,3 +242,12 @@ sudo ./install.sh osinstall
 If the original system installed with no issues, this will go the same. The script overwrites ZFSboot every time you install a new system. It does not affect the ZFS system in any way. I know it's jank – I'm not going to fix it right now.
 
 Enjoy your ZFS‑based Ubuntu!
+
+
+# Credits
+
+Be shure to check out https://github.com/Sithuk/ubuntu-server-zfsbootmenu Sithuk's script!
+Without this script this project would have been impossible :)  ❤️
+
+# License
+MIT
