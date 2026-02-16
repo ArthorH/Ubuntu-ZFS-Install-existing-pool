@@ -1,4 +1,4 @@
-# Robust ZFS Installation (Non-Encrypted) Workstation Edit
+# ZFS Installation (Non-Encrypted) Workstation Edit
 
 High-performance Ubuntu (Noble/Jammy) installation on ZFS with a focused, destructive deployment logic.
 
