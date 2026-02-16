@@ -15,6 +15,9 @@ High-performance Ubuntu (Noble/Jammy) installation on ZFS with a focused, destru
   - **Single Dataset Root**: Simplified hierarchy with all system directories under a single dataset (`/`).
 - **Networking**: Post-reboot Wi-Fi support and robust Netplan ethernet interface auto-detection.
 
+## Disk will look like this: 
+<img width="561" height="81" alt="Untitled Diagram drawio" src="https://github.com/user-attachments/assets/9dc6c113-f83f-42de-99b9-a2875244eef9" />
+
 ## Deployment
 
 1. **Clone**:
