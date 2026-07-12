@@ -43,7 +43,7 @@ High-performance Ubuntu (Noble/Jammy) installation on ZFS with a focused, destru
 - **Architecture**: Modularized script logic into `bin/` modules.
 - **Single Root**: Deployment mounts everything into the primary root dataset.
 
-## Ubuntu ZFS Install Guide (using ArthorH/Ubuntu-ZFS-Install-existing-pool)
+## Ubuntu ZFS Install Guide
 
 **Warning**: This script IS NOT A CHILL GUY. It will erase your drive, partition tables, and double-tap them by DD'ing GPT headers. If you have anything of value on that drive, move it now.
 
