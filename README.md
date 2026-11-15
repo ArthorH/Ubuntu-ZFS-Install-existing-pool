@@ -8,7 +8,11 @@ High-performance Ubuntu (Noble/Jammy) installation on ZFS with a focused, destru
 - **Partition Layout**:
   1. **ESP**: 512MB
   2. **ZFS Root**: Size defined by `zfs_root_size` in `config.sh`.
-  3. **EXT4 Data**: Unmanaged partition occupying the remainder of the disk.
+  3. **EXT4 Data**: Optional. Set `ext4_data_mode` in `config.sh`:
+     - `remainder` (default): unmanaged ext4 partition in the leftover space on the OS disk.
+     - `none`: no data partition is created or mounted. The space after the ZFS root is left unallocated; set `zfs_root_size="max"` to give the whole disk to ZFS instead.
+     - `disk`: ext4 data partition is created on a separate disk, selected during install.
+   - **Automount**: the data partition is mounted on demand through a systemd automount unit (`<mount>.automount` + `<mount>.mount`) instead of `/etc/fstab`. If the data disk is missing or damaged, boot is not blocked — the filesystem is simply unavailable until accessed. The first access mounts it and it stays mounted (`TimeoutIdleSec=0`).
 - **ZFS Configuration**:
   - **No Encryption**: Native ZFS and LUKS encryption disabled for maximum throughput.
   - **No Swap**: Swap partition removed from deployment.
@@ -89,6 +93,9 @@ disks_root="1"
 EFI_boot_size="512"         
 
 # Unmanaged Data Partition Configuration
+# "remainder" (leftover space on the OS disk), "none" (skip), or "disk" (separate drive, selected at install)
+# The data partition is mounted on demand via a systemd automount unit (no /etc/fstab entry).
+ext4_data_mode="remainder"
 ext4_data_mount="/data"      
 
 # ZFS General settings
@@ -158,7 +165,7 @@ What happens:
 - It unmounts all drives.
 - Kills all partition tables.
 - DD's GPT headers (double tap).
-- Creates partitions: EFI + ZFS + optional ext4 data.
+- Creates partitions: EFI + ZFS, plus an ext4 data partition unless `ext4_data_mode` is `none` or `disk`.
 - Installs a minimal system.
 
 If you missed configs and the script already partitioned your drive, you'll have to reboot the live ISO because another bulldoze from the same OS will throw partition request send but unable to inform kernel and crash.

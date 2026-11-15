@@ -20,6 +20,11 @@ disks_root="1"               # Number of disks for root pool (ignored for single
 EFI_boot_size="512"          # EFI partition size in MiB
 
 # Unmanaged Data Partition Configuration
+# ext4_data_mode:
+#   "remainder" - create an ext4 partition in the leftover space on the OS disk (default)
+#   "none"      - do not create or mount a data partition
+#   "disk"      - create the ext4 data partition on a separate disk (selected at install time)
+ext4_data_mode="remainder"
 ext4_data_mount="/data"      # Mount point for the unmanaged ext4 partition
 
 # ZFS General settings

@@ -205,18 +205,136 @@ EOCHROOT
 EOCHROOT
 
     ## Format and Mount unmanaged ext4 partition
-    while IFS= read -r diskidnum; do
-        if [ -z "${OS_INSTALL_MODE:-}" ]; then
-             mkfs.ext4 -F "/dev/disk/by-id/${diskidnum}-part3"
-        else
-             echo "Skipping ext4 data partition formatting in existing install mode."
-        fi
-        blkid_part3="$(blkid -s UUID -o value "/dev/disk/by-id/${diskidnum}-part3")"
-        chroot "$mountpoint" /bin/bash -x <<-EOCHROOT
-			mkdir -p "${ext4_data_mount}"
-			echo "UUID=$blkid_part3 ${ext4_data_mount} ext4 defaults 0 2" >> /etc/fstab
-EOCHROOT
-    done < /tmp/diskid_check_root.txt
+    case "${ext4_data_mode:-remainder}" in
+        none)
+            echo "ext4_data_mode=none: skipping data partition."
+            ;;
+        remainder)
+            while IFS= read -r diskidnum; do
+                if [ -z "${OS_INSTALL_MODE:-}" ]; then
+                     mkfs.ext4 -F "/dev/disk/by-id/${diskidnum}-part3"
+                else
+                     echo "Skipping ext4 data partition formatting in existing install mode."
+                fi
+                blkid_part3="$(blkid -s UUID -o value "/dev/disk/by-id/${diskidnum}-part3")"
+                setup_data_automount "$blkid_part3"
+            done < /tmp/diskid_check_root.txt
+            ;;
+        disk)
+            if [ -n "${OS_INSTALL_MODE:-}" ]; then
+                echo "Skipping separate data disk in existing install mode."
+            else
+                setup_data_disk
+            fi
+            ;;
+        *)
+            echo "Unknown ext4_data_mode '${ext4_data_mode}'. Use remainder, none, or disk."
+            exit 1
+            ;;
+    esac
+}
+
+mount_unit_name() {
+    # Convert an absolute path into a systemd unit base name (e.g. /data -> data).
+    local path="$1"
+    path="${path#/}"
+    path="${path%/}"
+    path="${path//-/\\x2d}"
+    path="${path//\//-}"
+    printf '%s' "$path"
+}
+
+setup_data_automount() {
+    # Configure a systemd automount unit for the data partition. No /etc/fstab
+    # entry is written, so a missing or damaged data disk cannot block boot.
+    local uuid="$1"
+    if [ -z "$uuid" ]; then
+        echo "Warning: no UUID found for the data partition; skipping automount."
+        return 0
+    fi
+
+    local mp="${ext4_data_mount%/}"
+    local unit
+    unit="$(mount_unit_name "$mp")"
+    local dev="/dev/disk/by-uuid/${uuid}"
+    local unitdir="$mountpoint/etc/systemd/system"
+    local wantsdir="$unitdir/multi-user.target.wants"
+
+    echo "Configuring systemd automount for ${dev} at ${mp} (unit ${unit})."
+
+    mkdir -p "$mountpoint$mp" "$unitdir" "$wantsdir"
+
+    cat > "$unitdir/${unit}.mount" <<EOF
+[Unit]
+Description=Unmanaged ext4 data partition (${mp})
+
+[Mount]
+What=${dev}
+Where=${mp}
+Type=ext4
+Options=defaults
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat > "$unitdir/${unit}.automount" <<EOF
+[Unit]
+Description=Automount unmanaged ext4 data partition (${mp})
+
+[Automount]
+Where=${mp}
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    ln -sf "/etc/systemd/system/${unit}.automount" "$wantsdir/${unit}.automount"
+}
+
+select_data_disk() {
+    # Called early, alongside OS disk selection, when ext4_data_mode=disk.
+    [ "${ext4_data_mode:-remainder}" = "disk" ] || return 0
+    [ -n "${OS_INSTALL_MODE:-}" ] && return 0
+
+    user_action_banner "Select a SEPARATE disk for the ext4 data partition.\n  This disk will be ERASED. It must not be an OS disk."
+    # getdiskID() checks this file for duplicate selections.
+    true > /tmp/diskid_check_data.txt
+    getdiskID "data" "1" "1"
+
+    data_diskid="$(tail -n 1 /tmp/diskid_check_data.txt)"
+    if grep -Fxq "$data_diskid" /tmp/diskid_check_root.txt; then
+        echo "Data disk '$data_diskid' is already selected as an OS disk. Exiting."
+        exit 1
+    fi
+}
+
+setup_data_disk() {
+    # Wipe the pre-selected data disk, create a single GPT ext4 partition,
+    # and configure its systemd automount unit.
+    data_diskid="$(tail -n 1 /tmp/diskid_check_data.txt 2>/dev/null || true)"
+    if [ -z "$data_diskid" ]; then
+        echo "No data disk selected. Set ext4_data_mode=disk and rerun from the start."
+        exit 1
+    fi
+
+    DATA_DRIVE="/dev/disk/by-id/${data_diskid}"
+    echo "Preparing data disk ${data_diskid}."
+
+    # Reuse the standard destructive wipe, driven by /tmp/diskid_check_data.txt.
+    clear_partition_table "data"
+
+    parted -s "$DATA_DRIVE" mklabel gpt
+    parted -s "$DATA_DRIVE" mkpart "DATA" "1MiB" "100%"
+    partprobe "$DATA_DRIVE" || true
+    sleep 2
+
+    DATA_PART="${DATA_DRIVE}-part1"
+    mkfs.ext4 -F "$DATA_PART"
+    blkid_data="$(blkid -s UUID -o value "$DATA_PART")"
+
+    setup_data_automount "$blkid_data"
 }
 
 systemsetupFunc_part4() {

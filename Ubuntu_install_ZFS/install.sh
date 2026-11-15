@@ -26,6 +26,7 @@ initialinstall() {
     live_desktop_check
     connectivity_check 
     getdiskID_pool "root"
+    select_data_disk
     ipv6_apt_live_iso_fix
 
     debootstrap_part1_Func

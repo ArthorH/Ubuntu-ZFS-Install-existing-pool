@@ -176,8 +176,11 @@ partitionsFunc() {
         # 2: ZFS Root (Size from config)
         add_part "ZFS" "$zfs_root_size" "BF01"
         
-        # 3: Unmanaged Space (Remainder)
-        add_part "DATA" "max" "8300"
+        # 3: Unmanaged Space (Remainder of the OS disk).
+        # Skipped for "none" (no data partition) and "disk" (data lives on another drive).
+        if [ "${ext4_data_mode:-remainder}" = "remainder" ]; then
+            add_part "DATA" "max" "8300"
+        fi
         
     done < "/tmp/diskid_check_root.txt"
     partprobe
