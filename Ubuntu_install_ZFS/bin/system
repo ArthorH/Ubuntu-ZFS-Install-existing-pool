@@ -395,7 +395,7 @@ EOCHROOT
 
 systemsetupFunc_part5() {
     chroot "$mountpoint" /bin/bash -x <<-EOCHROOT
-		printf "root:$PASSWORD\n" | chpasswd
+		printf '%s\n' "root:$PASSWORD" | chpasswd
 EOCHROOT
     
     # Swap setup removed for hybrid layout where part2 is ZFS Root
@@ -455,11 +455,50 @@ usersetup() {
 		cp -a /etc/skel/. "/home/$user"
 		chown -R "$user":"$user" "/home/$user"
 		usermod -a -G adm,cdrom,dip,lpadmin,lxd,plugdev,sambashare,sudo "$user"
-		printf "$user:$PASSWORD\n" | chpasswd
 
 		## Disable root login with password.
 		passwd -dl root
 	EOCHROOT
+
+	## Set the password from a file so special characters (%, ", \) are not mangled.
+	printf '%s:%s\n' "$user" "$PASSWORD" > "$mountpoint/tmp/new_user_password"
+	chmod 600 "$mountpoint/tmp/new_user_password"
+	chroot "$mountpoint" /bin/bash -x <<-EOCHROOT
+		chpasswd < /tmp/new_user_password
+		shred -u /tmp/new_user_password 2>/dev/null || rm -f /tmp/new_user_password
+	EOCHROOT
+}
+
+login_banner() {
+	## Display the login details that actually exist on the installed system
+	## (username and hostname are read back from the target), instead of echoing
+	## the config values. The password is shown as it was applied during install.
+	local passwd_file="$mountpoint/etc/passwd"
+	local host_file="$mountpoint/etc/hostname"
+
+	local real_users=""
+	if [ -f "$passwd_file" ]; then
+		real_users="$(awk -F: '$3 >= 1000 && $3 < 65534 { print $1 }' "$passwd_file" | paste -sd' ' -)"
+	fi
+
+	local real_host="(unknown)"
+	if [ -f "$host_file" ]; then
+		real_host="$(cat "$host_file")"
+	fi
+
+	printf '\n'
+	printf '################################################################\n'
+	printf '  LOGIN INFORMATION\n'
+	printf '################################################################\n'
+	if [ -n "$real_users" ]; then
+		printf '  Username : %s   (read from %s)\n' "$real_users" "$passwd_file"
+	else
+		printf '  Username : (no regular user found in %s)\n' "$passwd_file"
+	fi
+	printf '  Password : %s   (as set during install)\n' "$PASSWORD"
+	printf '  Hostname : %s   (read from %s)\n' "$real_host" "$host_file"
+	printf '################################################################\n'
+	printf '\n'
 }
 
 reinstall-zbm() {

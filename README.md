@@ -175,9 +175,18 @@ If you see this, you're golden:
 ```text
 Initial minimal system setup complete.
 Reboot required to complete installation.
-First login is user:passwd                  <----- remember it!!!
 Following reboot, run script with postreboot option to complete installation.
+
+################################################################
+  LOGIN INFORMATION
+################################################################
+  Username : testuser   (read from /mnt/ub_server/etc/passwd)
+  Password : testuser   (as set during install)
+  Hostname : ubuntu   (read from /mnt/ub_server/etc/hostname)
+################################################################
 ```
+
+The login banner is printed once right after the account is created (for debugging) and again as the final thing before the reboot. The username and hostname are read back from the freshly installed system, so they always match what you will actually log in with.
 
 If you don't see that message, the script crashed. Reboot and try again.
 

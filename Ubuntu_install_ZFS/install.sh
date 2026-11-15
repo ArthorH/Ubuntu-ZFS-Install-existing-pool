@@ -41,6 +41,7 @@ initialinstall() {
     systemsetupFunc_part5 
     
     usersetup 
+    login_banner
     logcompress 
     reinstate_apt "chroot" 
     script_copy 
@@ -49,8 +50,8 @@ initialinstall() {
     
     echo "Initial minimal system setup complete."
     echo "Reboot required to complete installation."
-    echo "First login is ${user}:${PASSWORD}"
     echo "Following reboot, run script with postreboot option to complete installation."
+    login_banner
 }
 
 os_install() {
@@ -76,6 +77,7 @@ os_install() {
     systemsetupFunc_part5 
     
     usersetup 
+    login_banner
     logcompress 
     reinstate_apt "chroot" 
     script_copy 
@@ -84,8 +86,8 @@ os_install() {
     
     echo "OS installation into existing pool complete."
     echo "Reboot required to complete installation."
-    echo "First login is ${user}:${PASSWORD}"
     echo "Following reboot, run script with postreboot option to complete installation."
+    login_banner
 }
 
 postreboot() {
