@@ -173,11 +173,18 @@ partitionsFunc() {
         # 1: EFI System Partition (512MB)
         add_part "EFI" 512 "EF00"
         
-        # 2: ZFS Root (Size from config)
-        add_part "ZFS" "$zfs_root_size" "BF01"
+        # 2: ZFS Root.
+        #   remainder : fixed size from config, reserving space for the DATA partition.
+        #   none/disk : no data partition on this disk, so ZFS takes the ENTIRE remaining
+        #               disk automatically (no need to guess the disk capacity).
+        if [ "${ext4_data_mode:-remainder}" = "remainder" ]; then
+            add_part "ZFS" "$zfs_root_size" "BF01"
+        else
+            add_part "ZFS" "max" "BF01"
+        fi
         
         # 3: Unmanaged Space (Remainder of the OS disk).
-        # Skipped for "none" (no data partition) and "disk" (data lives on another drive).
+        # Only created when the data partition lives on the OS disk.
         if [ "${ext4_data_mode:-remainder}" = "remainder" ]; then
             add_part "DATA" "max" "8300"
         fi

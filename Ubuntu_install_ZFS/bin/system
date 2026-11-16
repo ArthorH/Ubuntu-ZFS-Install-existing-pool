@@ -298,12 +298,23 @@ select_data_disk() {
     [ "${ext4_data_mode:-remainder}" = "disk" ] || return 0
     [ -n "${OS_INSTALL_MODE:-}" ] && return 0
 
-    user_action_banner "Select a SEPARATE disk for the ext4 data partition.\n  This disk will be ERASED. It must not be an OS disk."
     # getdiskID() checks this file for duplicate selections.
     true > /tmp/diskid_check_data.txt
-    getdiskID "data" "1" "1"
 
-    data_diskid="$(tail -n 1 /tmp/diskid_check_data.txt)"
+    if [ -n "${ext4_data_disk:-}" ]; then
+        # Non-interactive: the disk was pinned in config.sh (by-id name or full path).
+        data_diskid="$(basename "${ext4_data_disk}")"
+        if [ ! -e "/dev/disk/by-id/${data_diskid}" ]; then
+            echo "Configured ext4_data_disk '${ext4_data_disk}' not found under /dev/disk/by-id. Exiting."
+            exit 1
+        fi
+        printf '%s\n' "$data_diskid" >> /tmp/diskid_check_data.txt
+    else
+        user_action_banner "Select a SEPARATE disk for the ext4 data partition.\n  This disk will be ERASED. It must not be an OS disk."
+        getdiskID "data" "1" "1"
+        data_diskid="$(tail -n 1 /tmp/diskid_check_data.txt)"
+    fi
+
     if grep -Fxq "$data_diskid" /tmp/diskid_check_root.txt; then
         echo "Data disk '$data_diskid' is already selected as an OS disk. Exiting."
         exit 1
@@ -465,8 +476,15 @@ usersetup() {
 	chmod 600 "$mountpoint/tmp/new_user_password"
 	chroot "$mountpoint" /bin/bash -x <<-EOCHROOT
 		chpasswd < /tmp/new_user_password
+		usermod -U "$user" || true
 		shred -u /tmp/new_user_password 2>/dev/null || rm -f /tmp/new_user_password
 	EOCHROOT
+
+	## Sanity-check that the account is actually usable before telling the user to log in.
+	passwd_status="$(chroot "$mountpoint" passwd -S "$user" 2>/dev/null | awk '{ print $2 }' || true)"
+	if [ "$passwd_status" != "P" ]; then
+		printf '\nWARNING: the password for "%s" may not have been set correctly (passwd status: %s).\n' "$user" "${passwd_status:-unknown}"
+	fi
 }
 
 login_banner() {

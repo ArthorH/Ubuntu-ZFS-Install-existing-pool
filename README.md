@@ -7,11 +7,11 @@ High-performance Ubuntu (Noble/Jammy) installation on ZFS with a focused, destru
 - **Drive Preparation (Bulldozer)**: Forced unmounts, swap deactivation, and `dd` overwrite of GPT/MBR headers (first/last 10MB) to ensure a clean state.
 - **Partition Layout**:
   1. **ESP**: 512MB
-  2. **ZFS Root**: Size defined by `zfs_root_size` in `config.sh`.
+  2. **ZFS Root**: `zfs_root_size` from `config.sh` is used **only** in `remainder` mode. In `none`/`disk` mode ZFS automatically takes the whole remaining OS disk, so you never have to match the disk's real capacity.
   3. **EXT4 Data**: Optional. Set `ext4_data_mode` in `config.sh`:
-     - `remainder` (default): unmanaged ext4 partition in the leftover space on the OS disk.
-     - `none`: no data partition is created or mounted. The space after the ZFS root is left unallocated; set `zfs_root_size="max"` to give the whole disk to ZFS instead.
-     - `disk`: ext4 data partition is created on a separate disk, selected during install.
+     - `remainder` (default): unmanaged ext4 partition in the leftover space on the OS disk (ZFS root is `zfs_root_size`).
+     - `none`: no data partition is created or mounted. The ZFS root automatically fills the entire remaining disk.
+     - `disk`: ext4 data partition is created on a separate disk, selected during install. The OS disk's remaining space goes to ZFS.
    - **Automount**: the data partition is mounted on demand through a systemd automount unit (`<mount>.automount` + `<mount>.mount`) instead of `/etc/fstab`. If the data disk is missing or damaged, boot is not blocked — the filesystem is simply unavailable until accessed. The first access mounts it and it stays mounted (`TimeoutIdleSec=0`).
 - **ZFS Configuration**:
   - **No Encryption**: Native ZFS and LUKS encryption disabled for maximum throughput.

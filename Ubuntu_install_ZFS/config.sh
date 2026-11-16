@@ -12,7 +12,7 @@ hostname="ubuntu"            # Hostname for the system
 # ZFS Root Pool Configuration
 RPOOL="rpool"                # Root pool name
 zfs_rpool_ashift="12"        # ashift=9 (512B), 12 (4KiB), 13 (8KiB)
-zfs_root_size="50G"          # Fixed size for ZFS root partition (e.g., 50G, 100G)
+zfs_root_size="50G"          # ZFS root size. Used ONLY when ext4_data_mode="remainder"; in "none"/"disk" mode ZFS fills the whole disk.
 topology_root="single"       # "single", "mirror", "raid0", "raidz1", "raidz2", "raidz3"
 disks_root="1"               # Number of disks for root pool (ignored for single)
 
@@ -25,6 +25,7 @@ EFI_boot_size="512"          # EFI partition size in MiB
 #   "none"      - do not create or mount a data partition
 #   "disk"      - create the ext4 data partition on a separate disk (selected at install time)
 ext4_data_mode="remainder"
+ext4_data_disk=""            # Optional: pin the data disk by its /dev/disk/by-id name, e.g. "ata-WDC_WD40EFRX-68N32N0_WD-WCC7K1234567". If empty, you pick it interactively.
 ext4_data_mount="/data"      # Mount point for the unmanaged ext4 partition
 
 # ZFS General settings
